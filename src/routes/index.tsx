@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -51,21 +52,39 @@ function Index() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const history = [...messages, userMessage];
+    setMessages(history);
     setInput("");
     setIsTyping(true);
 
-    // Simulate a simple reply after a short delay
-    setTimeout(() => {
-      const reply: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: `You said: "${text}". This is a demo reply from NodeOps.`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, reply]);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: history
+            .filter((m) => m.id !== "welcome")
+            .map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      const data = (await res.json()) as { reply?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: data.reply || "(empty response)",
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setIsTyping(false);
-    }, 800);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
